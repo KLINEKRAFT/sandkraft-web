@@ -279,4 +279,45 @@ float groundY(sampler2D field, sampler2D lut, vec2 p) {
     bool inside = all(greaterThanEqual(uv, vec2(0.0))) && all(lessThanEqual(uv, vec2(1.0)));
     return bed.x + (inside ? sandSmooth(field, uv).r : bed.y);
 }
+
+/// The same height, by nearest texel: two fetches instead of eight.
+///
+/// The smoothed version above exists because the terrain shader rebuilds its
+/// normal by *differencing* it, and a sampler whose gradient is piecewise
+/// constant prints its own texel grid onto the beach. Nothing that marches
+/// cares about that — a shadow ray asks this a dozen times and an occlusion
+/// horizon two dozen more, and all any of them want is "is the ground above me
+/// yet". Paying eight fetches a tap for an answer that gets thresholded anyway
+/// is how a cheap idea becomes an expensive one.
+float groundYPoint(sampler2D field, sampler2D lut, vec2 p) {
+    vec2 g = clamp((p + BEDROCK_EXTENT) / (2.0 * BEDROCK_EXTENT), 0.0, 1.0);
+    ivec2 ls = textureSize(lut, 0);
+    vec2 bed = texelFetch(lut, ivec2(g * vec2(ls - ivec2(1)) + 0.5), 0).rg;
+
+    vec2 uv = worldToUV(p);
+    if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0)))) {
+        return bed.x + bed.y;               // off the square: the pristine bed
+    }
+    ivec2 fs = textureSize(field, 0);
+    ivec2 fi = clamp(ivec2(uv * vec2(fs)), ivec2(0), fs - ivec2(1));
+    return bed.x + texelFetch(field, fi, 0).r;
+}
+
+// ------------------------------------------------------------------ the light
+
+/// The baked light over the beach: .x is how much of the sun reaches this
+/// point, .y is how much of the sky.
+///
+/// One hardware-filtered tap, unlike every other sampler in this file. It can
+/// be, because this map is RGBA8 rather than float — eight bits is more than
+/// three-band shading can show — and because nothing differences it.
+vec2 lightAt(sampler2D lightMap, vec2 p) {
+    vec2 uv = worldToUV(p);
+    vec2 L = textureLod(lightMap, clamp(uv, 0.0, 1.0), 0.0).rg;
+    // Ease back to open sun and open sky just outside the simulated square.
+    // Clamp-to-edge alone would smear a headland's shadow three hundred metres
+    // out to sea along the skirt.
+    vec2 d = min(uv, 1.0 - uv);
+    return mix(vec2(1.0), L, smoothstep(-0.02, 0.008, min(d.x, d.y)));
+}
 `;

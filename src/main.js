@@ -6,6 +6,7 @@ import { Renderer } from './renderer.js';
 import { Camera } from './camera.js';
 import { Input } from './input.js';
 import { Props, PROP_KINDS } from './props.js';
+import { SunLight } from './light.js';
 import * as storage from './storage.js';
 
 // Two tiers, chosen from the device rather than offered as a setting. A phone
@@ -17,9 +18,13 @@ import * as storage from './storage.js';
 // hold, and at 0.33 m a moulded tower still has a crisp lip. Substeps came down
 // to pay for it, which costs a little stiffness in the avalanche and nothing
 // visible.
+// `lightGrid` is deliberately coarser than `sim`: a cartoon shadow wants a soft
+// edge, the terrain reads the table through a hardware bilinear tap that softens
+// it further, and this is the one table whose cost does not fall with the pixel
+// ratio when the watchdog below eases the detail back.
 const TIERS = {
-    phone:   { sim: 288, terrainGrid: 224, skirtGrid: 112, waterGrid: 128, substeps: 2, maxDPR: 2.0 },
-    desktop: { sim: 384, terrainGrid: 352, skirtGrid: 160, waterGrid: 192, substeps: 3, maxDPR: 2.0 },
+    phone:   { sim: 288, terrainGrid: 224, skirtGrid: 112, waterGrid: 128, lightGrid: 256, substeps: 2, maxDPR: 2.0 },
+    desktop: { sim: 384, terrainGrid: 352, skirtGrid: 160, waterGrid: 192, lightGrid: 320, substeps: 3, maxDPR: 2.0 },
 };
 
 const canvas = document.getElementById('scene');
@@ -49,6 +54,7 @@ const sim = new SandSim(gl, floatRenderable, tier.sim);
 const renderer = new Renderer(gl, tier);
 const camera = new Camera();
 const props = new Props(gl);
+const light = new SunLight(gl, tier.lightGrid);
 
 sim.reset();
 
@@ -498,7 +504,7 @@ function frame(now) {
     updateCursor(dt);
 
     camera.update(canvas.width / canvas.height);
-    renderer.draw(sim, camera, env, props, cursor);
+    renderer.draw(sim, camera, env, props, cursor, light);
 
     requestAnimationFrame(frame);
 }

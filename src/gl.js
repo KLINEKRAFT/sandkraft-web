@@ -88,6 +88,27 @@ export function floatTexture(gl, width, height, floatRenderable) {
     return tex;
 }
 
+/// An 8-bit colour target the hardware will filter for you.
+///
+/// Deliberately not a float texture. What goes in here is two occlusion terms
+/// in 0..1, and eight bits is more resolution than three-band shading can show.
+/// What it buys is that RGBA8 is both colour-renderable *and* linearly
+/// filterable everywhere — which the float textures in this project are not,
+/// and which is the whole reason every other sampler here reimplements bilinear
+/// by hand. One `texture()` tap instead of four `texelFetch`es, in a shader
+/// that already samples the ground four times to rebuild its normal.
+export function colorTexture(gl, width, height) {
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+    return tex;
+}
+
 export function framebuffer(gl, texture) {
     const fbo = gl.createFramebuffer();
     gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);

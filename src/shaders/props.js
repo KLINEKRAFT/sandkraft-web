@@ -25,11 +25,13 @@ uniform mat4      uViewProj;
 uniform sampler2D uField;
 uniform sampler2D uBedrock;
 uniform sampler2D uProps;     // two texels per prop
+uniform sampler2D uLight;
 uniform vec3      uCamRight;
 
 out vec2  vUV;
 out float vKind;
 out float vTint;
+out float vSun;
 
 void main() {
     int inst = gl_InstanceID;
@@ -54,6 +56,10 @@ void main() {
 
     vKind = a.w;
     vTint = b.y;
+    // Sampled once at the foot rather than per fragment: a prop is a metre or
+    // two of flat silhouette, so one answer for the whole thing is the right
+    // number of answers, and it is the ground it is standing on that decides it.
+    vSun = lightAt(uLight, a.xy).x;
     gl_Position = uViewProj * vec4(world, 1.0);
 }`;
 
@@ -63,6 +69,7 @@ precision highp float;
 in vec2  vUV;
 in float vKind;
 in float vTint;
+in float vSun;
 
 uniform vec3 uSunDir;
 
@@ -203,8 +210,12 @@ void main() {
     // One flat shading step, keyed off the sun's height rather than a normal —
     // props have no normals, and inventing one per shape would buy nothing a
     // cartoon audience would notice.
-    float key = smoothstep(0.05, 0.45, uSunDir.y);
-    col *= mix(0.80, 1.0, key);
+    //
+    // Times the sun the sand under it is getting, and shifted toward the same
+    // violet the beach shades with, so a bucket in a tower's shadow goes with
+    // the shadow instead of glowing out of the middle of it.
+    float key = smoothstep(0.05, 0.45, uSunDir.y) * vSun;
+    col *= mix(vec3(0.66, 0.64, 0.83), vec3(1.0), key);
 
     outColor = vec4(col, 1.0);
 }`;

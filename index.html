@@ -172,19 +172,19 @@ input[type=range]::-moz-range-thumb {
     cursor: pointer;
 }
 
-/* Centred between the left inset and the menu button rather than on the screen,
+/* Centred in the band between the two corner buttons rather than on the screen,
    and allowed to wrap. Pinned to 50% with `nowrap` it ran under the menu button
    on anything narrower than a Plus. */
 #hint {
     position: fixed;
     top: calc(10px + env(safe-area-inset-top));
-    left: calc(12px + env(safe-area-inset-left));
-    right: calc(68px + env(safe-area-inset-right));
+    left: calc(64px + env(safe-area-inset-left));
+    right: calc(64px + env(safe-area-inset-right));
     width: max-content;
     /* Spelled out rather than `100%`: this box's containing block is the
        viewport, so a percentage would resolve against the whole screen and
        happily overflow the band that left/right just carved out. */
-    max-width: calc(100vw - 80px - env(safe-area-inset-left) - env(safe-area-inset-right));
+    max-width: calc(100vw - 128px - env(safe-area-inset-left) - env(safe-area-inset-right));
     margin: 0 auto;
     padding: 7px 15px;
     background: var(--paper);
@@ -270,10 +270,11 @@ input[type=range]::-moz-range-thumb {
 
 .glyphonly { min-width: 40px; padding: 0 10px; }
 
-#menu {
+/* The two corner buttons. Undo on the left and the menu on the right, which
+   leaves the hint a symmetric band down the middle to be centred in. */
+#menu, #undo {
     position: fixed;
     top: calc(10px + env(safe-area-inset-top));
-    right: calc(10px + env(safe-area-inset-right));
     width: 46px;
     height: 46px;
     min-width: 0;
@@ -282,6 +283,14 @@ input[type=range]::-moz-range-thumb {
     background: var(--paper);
     z-index: 5;
 }
+
+#menu { right: calc(10px + env(safe-area-inset-right)); }
+#undo { left: calc(10px + env(safe-area-inset-left)); }
+
+/* Greyed rather than hidden: a button that comes and goes is a button you have
+   to look for, and this one wants to be in the same place every time. */
+#undo:disabled { opacity: 0.38; cursor: default; }
+#undo:disabled:active { transform: none; }
 
 #toast {
     position: fixed;
@@ -404,6 +413,7 @@ button.mini:disabled { opacity: 0.4; cursor: default; }
 
 <div id="hint">One finger digs · two fingers move the camera</div>
 
+<button id="undo" aria-label="Undo" title="Undo" disabled>↺</button>
 <button id="menu" aria-label="Menu">☰</button>
 <div id="toast" hidden></div>
 
@@ -418,6 +428,7 @@ button.mini:disabled { opacity: 0.4; cursor: default; }
 
     <div class="sizer">
         <button id="footprint" class="mini glyphonly" title="Round or square footprint"><span class="glyph">⬤</span></button>
+        <button id="snap" class="mini glyphonly" title="Snap to a grid, and keep drags straight" aria-pressed="false"><span class="glyph">⊞</span></button>
         <input id="size" type="range" min="1.0" max="9.0" step="0.1" value="3.0" aria-label="Brush size">
         <span id="sizeval">3.0 m</span>
     </div>

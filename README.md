@@ -60,7 +60,7 @@ a phone has no modifier key to hold.
 |---|---|
 | **Dig** | Takes sand away, down to the hardpack and no further |
 | **Pour** | Adds damp sand from the pail |
-| **Mould** | Turns out a tower, a block or a cone — packed hard, so it stands |
+| **Mould** | Turns out a tower, a block or a cone — packed hard, so it stands. Tap for one; **drag to lay a run** |
 | **Wall** | Drags out a packed rampart at one height |
 | **Flatten** | Levels toward wherever the stroke began |
 | **Pack** | The flat of a hand. This is what buys a vertical face |
@@ -70,6 +70,36 @@ a phone has no modifier key to hold.
 Every stroke is a *swept segment*, not a stamped point, so a fast drag is
 continuous rather than dotted. Strength eases in over about a fifth of a second,
 which is what stops a tap from gouging.
+
+**Dragging the mould lays a run.** Every shape in the run stands on the height
+the run *started* at, which is what makes a line of blocks come out as one wall
+with a level top instead of a row of lumps following the beach down to the sea.
+Blocks turn to face along the drag and overlap heavily so the run reads as solid;
+towers and cones stand further apart, so dragging those gives you a row of
+turrets. A tap keeps the heading the last drag ended on, so a wall you extend one
+block at a time stays square to the wall it is extending.
+
+**Undo** (↺, top left) goes back a step at a time — eight on a phone, fourteen on
+a desktop. One entry per action: a stroke is one undo, a dragged run of forty
+blocks is one undo, and so is starting a new beach. The copy is
+`blitFramebuffer`, GPU to GPU, so taking it costs nothing on the strokes nobody
+ever undoes. `sim.snapshot()` would have been the obvious way and is the wrong
+one: it is a `readPixels` of a megabyte and a half that stalls the pipeline, on
+every stroke, whether or not the feature is used.
+
+**Snap** (⊞, beside the size slider) is two things under one switch, because they
+are one idea — stop the beach depending on how steady your thumb is:
+
+- the tool lands on a one-metre grid, so two towers placed a minute apart line
+  up. One metre rather than something derived from the brush, because a grid that
+  changes size when you move a slider is not a grid you can build a symmetry on;
+- a **mould run or a wall drag locks to one of the eight compass headings** and
+  runs dead straight from where it began, however much the finger wanders. The
+  heading is *latched* once the drag is a metre and a half long, not re-derived
+  as you go: a hand wobbling across the boundary between two headings would
+  otherwise make the far end of the wall jump between two rays and the run would
+  fill in the gap each time. What you get then is not a wall, it is a ploughed
+  field.
 
 The ring on the sand is the tool. Its rim is the edge of the brush, its inner
 ring is the part working at full strength (`BRUSH_CORE` in `shaders/common.js` —

@@ -120,7 +120,7 @@ uniform float uOuter;
 //
 // uCursor:     xy = centre in world metres, z = radius, w = opacity 0..1
 // uCursor2:    x = footprint (0 round, 1 square), y = 1 while the tool is
-//              actually working, z = tap flare 0..1
+//              actually working, z = tap flare 0..1, w = footprint rotation
 // uCursorTint: the tool's colour
 uniform vec4 uCursor;
 uniform vec4 uCursor2;
@@ -249,6 +249,13 @@ void main() {
     // pip is where the stroke is aimed.
     if (uCursor.w > 0.01) {
         vec2 dv = wp - uCursor.xy;
+        // Same convention as the mould: the sample point is rotated, not the
+        // shape, so a square ring turned along a drag matches the block that is
+        // about to land in it.
+        if (uCursor2.w != 0.0) {
+            float cr = cos(uCursor2.w), sr = sin(uCursor2.w);
+            dv = vec2(cr * dv.x - sr * dv.y, sr * dv.x + cr * dv.y);
+        }
         float d = (uCursor2.x > 0.5) ? max(abs(dv.x), abs(dv.y)) : length(dv);
         float r = max(uCursor.z, 0.25);
 

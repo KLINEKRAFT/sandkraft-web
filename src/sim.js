@@ -49,8 +49,15 @@ export class SandSim {
             parameter: 1.2,           // wall height, mostly
         };
 
-        this.stamp = null;
-        this.stampArmed = false;
+        // Moulds waiting to be turned out, oldest first.
+        //
+        // A queue rather than a single armed stamp because the mould is dragged
+        // now: one tap lays one block, a drag lays a run of them, and a run has
+        // to survive a frame that is only two substeps long. The cap is a
+        // runaway guard, not a budget — one substep drains one stamp, which is
+        // 120 a second, and a finger dragging at arm's length generates about
+        // three.
+        this.stampQueue = [];
 
         this.bakeBedrock();
     }
@@ -157,15 +164,15 @@ export class SandSim {
         gl.uniform1i(u.uTool, s.tool > 6 ? 0 : s.tool);
         gl.uniform1i(u.uBrushShape, s.shape);
 
-        const st = this.stampArmed ? this.stamp : null;
-
         for (let i = 0; i < substeps; i++) {
             gl.uniform1f(u.uTime, env.time + sub * i);
 
-            // The mould lands on exactly one substep. Firing it on every substep
-            // would turn out four towers a millimetre apart, which reads as one
-            // very strange tower.
-            if (st && i === 0) {
+            // At most one mould per substep. Firing the same one on every
+            // substep would turn out four towers a millimetre apart, which reads
+            // as one very strange tower; firing the whole queue at once would
+            // need the shape test to loop over it, per texel, forever.
+            const st = this.stampQueue.length > 0 ? this.stampQueue.shift() : null;
+            if (st) {
                 gl.uniform4f(u.uStamp, st.x, st.z, st.radius, st.height);
                 gl.uniform4f(u.uStamp2, st.shape, st.rotation, 1, st.baseY);
             } else {
@@ -185,8 +192,6 @@ export class SandSim {
         }
 
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-
-        if (st) { this.stampArmed = false; this.stamp = null; }
 
         // The stroke's tail catches up with its head, so the next frame sweeps
         // from here rather than from wherever the finger first went down.
@@ -227,10 +232,20 @@ export class SandSim {
         this.stroke.tool = TOOL.none;
     }
 
-    /// Arm a mould to be turned out on the next step.
-    armMould({ x, z, radius, height, shape, rotation = 0 }) {
-        this.stamp = { x, z, radius, height, shape, rotation, baseY: this.surfaceAt(x, z) };
-        this.stampArmed = true;
+    /// Queue a mould to be turned out.
+    ///
+    /// `baseY` is the surface it stands on. Pass it explicitly when laying a run
+    /// — every block in a dragged wall wants the height the *run* started at,
+    /// not the height under itself. That is both what makes the top of the wall
+    /// level instead of following the beach down to the sea, and what keeps the
+    /// drag off `surfaceAt`, which stalls the pipeline on a one-texel readback
+    /// and cannot be called sixty times a second.
+    armMould({ x, z, radius, height, shape, rotation = 0, baseY = null }) {
+        if (this.stampQueue.length >= 48) { return; }
+        this.stampQueue.push({
+            x, z, radius, height, shape, rotation,
+            baseY: baseY === null ? this.surfaceAt(x, z) : baseY,
+        });
     }
 
     /// The *live* surface height at a world point: baked hardpack from the CPU

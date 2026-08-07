@@ -97,7 +97,7 @@ export class Renderer {
         // border of the playable square.
         if (cursor && cursor.alpha > 0.01) {
             gl.uniform4f(t.uCursor, cursor.x, cursor.z, cursor.radius, cursor.alpha);
-            gl.uniform4f(t.uCursor2, cursor.shape, cursor.active, cursor.pulse, 0);
+            gl.uniform4f(t.uCursor2, cursor.shape, cursor.active, cursor.pulse, cursor.rotation);
             gl.uniform3fv(t.uCursorTint, cursor.tint);
         } else {
             gl.uniform4f(t.uCursor, 0, 0, 1, 0);

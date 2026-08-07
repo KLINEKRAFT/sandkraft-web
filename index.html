@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sandkraft — Minimal</title>
+
+<!-- viewport-fit=cover puts the canvas under the notch; the UI is inset back
+     out of it with env(safe-area-inset-*) below. user-scalable=no is what stops
+     a double-tap on a tool button zooming the whole page. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no, maximum-scale=1">
+<meta name="theme-color" content="#8FD8F0">
+<meta name="description" content="A minimal, cartoon-styled sandcastle sandbox. Dig, pour, pack, and watch the tide take it back.">
+
+<!-- Added to the Home Screen it runs without Safari's chrome, which is most of
+     the way to feeling like an app without being one. -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Sandkraft">
+
+<!-- Inline, so the page makes exactly one request for exactly one file and the
+     server never has to answer for a favicon it does not have. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%F0%9F%8F%96%EF%B8%8F%3C/text%3E%3C/svg%3E">
+
+<style>
+:root {
+    --ink:    #32251C;
+    --paper:  #FFF3DC;
+    --sand:   #F4C77B;
+    --sea:    #66D6E0;
+    --coral:  #FF8A5B;
+    --shadow: 0 3px 0 rgba(50, 37, 28, 0.85);
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+/* Any explicit `display` in this sheet beats the user agent's
+   `[hidden] { display: none }`, and both #ui and #fatal set one. Without this
+   line the error panel covers the game from the first paint — which is exactly
+   how it was found. */
+[hidden] { display: none !important; }
+
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+    background: #8FD8F0;
+    font-family: ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont,
+                 "Segoe UI", Roboto, system-ui, sans-serif;
+    color: var(--ink);
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-text-size-adjust: 100%;
+}
+
+#scene {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    /* Without this, a drag on the canvas scrolls the page instead of the sand. */
+    touch-action: none;
+}
+
+#ui {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 0 12px calc(12px + env(safe-area-inset-bottom)) 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+    /* The bar is furniture; only its controls take input, so you can still dig
+       through the gaps between the buttons. */
+    pointer-events: none;
+}
+
+#ui > * { pointer-events: auto; }
+
+.tools {
+    display: flex;
+    gap: 8px;
+    padding: 8px;
+    background: var(--paper);
+    border: 3px solid var(--ink);
+    border-radius: 22px;
+    box-shadow: var(--shadow);
+    max-width: 100%;
+}
+
+button {
+    font: inherit;
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.01em;
+    color: var(--ink);
+    background: #FFFFFF;
+    border: 2.5px solid var(--ink);
+    border-radius: 15px;
+    /* 54px square clears Apple's 44pt minimum with room for fat thumbs. */
+    min-width: 54px;
+    height: 54px;
+    padding: 4px 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    cursor: pointer;
+    transition: transform 90ms ease, background 90ms ease;
+}
+
+button:active { transform: translateY(2px); }
+button.on { background: var(--sand); }
+button .glyph { font-size: 19px; line-height: 1; }
+button .label { font-size: 10px; opacity: 0.75; }
+
+#tide.on { background: var(--sea); }
+#reset { background: #FFFFFF; }
+
+.sizer {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 15px;
+    background: var(--paper);
+    border: 3px solid var(--ink);
+    border-radius: 20px;
+    box-shadow: var(--shadow);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+input[type=range] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 128px;
+    height: 8px;
+    border-radius: 4px;
+    border: 2px solid var(--ink);
+    background: var(--sand);
+    outline: none;
+}
+
+input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--coral);
+    border: 2.5px solid var(--ink);
+    cursor: pointer;
+}
+
+input[type=range]::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: var(--coral);
+    border: 2.5px solid var(--ink);
+    cursor: pointer;
+}
+
+#hint {
+    position: fixed;
+    top: calc(10px + env(safe-area-inset-top));
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 7px 15px;
+    background: var(--paper);
+    border: 3px solid var(--ink);
+    border-radius: 18px;
+    box-shadow: var(--shadow);
+    font-size: 12px;
+    font-weight: 700;
+    white-space: nowrap;
+    animation: fade 1s ease 7s forwards;
+}
+
+@keyframes fade { to { opacity: 0; visibility: hidden; } }
+
+#fatal {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px;
+    text-align: center;
+    font-size: 15px;
+    font-weight: 600;
+    line-height: 1.5;
+    background: var(--paper);
+}
+
+/* Nine tools do not fit across a phone. Scrolling sideways keeps them all one
+   tap away and keeps the bar one row tall, which matters because every row of
+   furniture is a row of beach you cannot see. */
+.tools {
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    justify-content: flex-start;
+}
+.tools::-webkit-scrollbar { display: none; }
+.tools button { flex: 0 0 auto; }
+
+.chips {
+    display: flex;
+    gap: 6px;
+    padding: 6px;
+    background: var(--paper);
+    border: 3px solid var(--ink);
+    border-radius: 18px;
+    box-shadow: var(--shadow);
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+.chips::-webkit-scrollbar { display: none; }
+
+.chip {
+    min-width: 46px;
+    height: 44px;
+    border-radius: 12px;
+    flex: 0 0 auto;
+}
+.chip .glyph { font-size: 17px; }
+.chip .label { font-size: 9px; }
+
+.glyphonly { min-width: 40px; padding: 0 10px; }
+
+#menu {
+    position: fixed;
+    top: calc(10px + env(safe-area-inset-top));
+    right: calc(10px + env(safe-area-inset-right));
+    width: 46px;
+    height: 46px;
+    min-width: 0;
+    font-size: 20px;
+    border-radius: 14px;
+    background: var(--paper);
+    z-index: 5;
+}
+
+#toast {
+    position: fixed;
+    top: calc(66px + env(safe-area-inset-top));
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 8px 16px;
+    background: var(--ink);
+    color: var(--paper);
+    border-radius: 16px;
+    font-size: 12px;
+    font-weight: 700;
+    z-index: 6;
+    max-width: 84vw;
+    text-align: center;
+}
+
+#sheet {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    background: rgba(50, 37, 28, 0.35);
+    z-index: 7;
+    padding: 12px;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
+}
+
+.sheetinner {
+    width: 100%;
+    max-width: 420px;
+    background: var(--paper);
+    border: 3px solid var(--ink);
+    border-radius: 22px;
+    box-shadow: var(--shadow);
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.sheethead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 15px;
+}
+
+.slot {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 12px;
+    border: 2.5px solid var(--ink);
+    border-radius: 15px;
+    background: #FFFFFF;
+    font-size: 12px;
+    cursor: pointer;
+}
+.slot.on { background: var(--sea); }
+.slotname { font-weight: 700; white-space: nowrap; }
+.slotinfo { opacity: 0.7; flex: 1; text-align: right; font-size: 11px; }
+
+button.mini {
+    min-width: 0;
+    height: 34px;
+    padding: 0 12px;
+    font-size: 12px;
+    border-radius: 11px;
+    flex-direction: row;
+}
+button.mini:disabled { opacity: 0.4; cursor: default; }
+
+@media (max-width: 400px) {
+    button { min-width: 50px; height: 50px; }
+    .tools button .label { font-size: 9px; }
+    input[type=range] { width: 100px; }
+}
+</style>
+</head>
+<body>
+
+<canvas id="scene"></canvas>
+
+<div id="hint">One finger digs · two fingers move the camera</div>
+
+<button id="menu" aria-label="Menu">☰</button>
+<div id="toast" hidden></div>
+
+<div id="ui" hidden>
+    <!-- Contextual rows. Only the one the current tool uses is shown. -->
+    <div id="shapes" class="chips" hidden>
+        <button class="chip on" data-shape="tower"><span class="glyph">🗼</span><span class="label">Tower</span></button>
+        <button class="chip" data-shape="block"><span class="glyph">🧱</span><span class="label">Block</span></button>
+        <button class="chip" data-shape="cone"><span class="glyph">⛰️</span><span class="label">Cone</span></button>
+    </div>
+    <div id="propbar" class="chips" hidden></div>
+
+    <div class="sizer">
+        <button id="footprint" class="mini glyphonly" title="Round or square footprint"><span class="glyph">⬤</span></button>
+        <input id="size" type="range" min="1.0" max="9.0" step="0.1" value="3.0" aria-label="Brush size">
+    </div>
+
+    <!-- Scrolls sideways rather than wrapping. Eight tools do not fit across a
+         phone, and a wrapped two-row bar eats the beach. -->
+    <div class="tools">
+        <button data-tool="dig" class="on"><span class="glyph">⛏</span><span class="label">Dig</span></button>
+        <button data-tool="pour"><span class="glyph">🪣</span><span class="label">Pour</span></button>
+        <button data-tool="mould"><span class="glyph">🏰</span><span class="label">Mould</span></button>
+        <button data-tool="wall"><span class="glyph">🧱</span><span class="label">Wall</span></button>
+        <button data-tool="flatten"><span class="glyph">▭</span><span class="label">Flatten</span></button>
+        <button data-tool="pack"><span class="glyph">✋</span><span class="label">Pack</span></button>
+        <button data-tool="wet"><span class="glyph">💧</span><span class="label">Wet</span></button>
+        <button data-tool="prop"><span class="glyph">🚩</span><span class="label">Place</span></button>
+        <button data-tool="erase"><span class="glyph">🧺</span><span class="label">Pick up</span></button>
+    </div>
+</div>
+
+<div id="sheet" hidden>
+    <div class="sheetinner">
+        <div class="sheethead">
+            <strong>Beach</strong>
+            <button id="closesheet" class="mini">Done</button>
+        </div>
+        <div id="slots"></div>
+        <div class="slot" id="tide">
+            <span class="slotname">🌊 Tide</span>
+            <span class="slotinfo">The sea works the shore</span>
+        </div>
+        <div class="slot" id="panmode">
+            <span class="slotname">✋ Two-finger pan</span>
+            <span class="slotinfo">Two fingers turn the beach</span>
+        </div>
+        <div class="slot" id="reset">
+            <span class="slotname">↺ New beach</span>
+            <span class="slotinfo">Starts over. Saved beaches are kept.</span>
+        </div>
+    </div>
+</div>
+
+<div id="fatal" hidden></div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>

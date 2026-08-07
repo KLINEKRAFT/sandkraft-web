@@ -45,7 +45,7 @@ export class Renderer {
         this.scene = sceneTarget(gl, width, height);
     }
 
-    draw(sim, camera, env, props) {
+    draw(sim, camera, env, props, cursor) {
         const gl = this.gl;
         const { width, height } = this.scene;
         const domainSpan = 96;
@@ -84,6 +84,19 @@ export class Renderer {
         gl.uniform1f(t.uSeaBase, env.seaBase);
         gl.uniform1f(t.uTime, env.time);
         gl.uniform1f(t.uCell, cell);
+
+        // The tool ring. Set once for both terrain draws — the fine grid and
+        // the skirt share this program, and the ring should not stop at the
+        // border of the playable square.
+        if (cursor && cursor.alpha > 0.01) {
+            gl.uniform4f(t.uCursor, cursor.x, cursor.z, cursor.radius, cursor.alpha);
+            gl.uniform4f(t.uCursor2, cursor.shape, cursor.active, cursor.pulse, 0);
+            gl.uniform3fv(t.uCursorTint, cursor.tint);
+        } else {
+            gl.uniform4f(t.uCursor, 0, 0, 1, 0);
+            gl.uniform4f(t.uCursor2, 0, 0, 0, 0);
+        }
+
         bindTexture(gl, this.pTerrain, 'uField', 0, sim.front);
         bindTexture(gl, this.pTerrain, 'uBedrock', 1, sim.bedrock);
 

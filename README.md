@@ -1,4 +1,4 @@
-# Sandkraft — minimal web edition
+# Sandkraft — web edition
 
 A cartoon-styled sandcastle sandbox that runs in a phone browser. Dig, mould,
 wall, flatten, pack, wet, decorate — and watch the tide take it back.
@@ -6,11 +6,18 @@ wall, flatten, pack, wet, decorate — and watch the tide take it back.
 96 m of beach, about three metres of loose sand over the working ground, nine
 tools, six props and three save slots.
 
-This is not a port of the app in `Sandkraft/`. It is a much smaller thing that
-shares the app's physics: the angle-of-repose curve, the eight-neighbour
-avalanche relaxation and the beach profile are carried across from
-`Sandkraft/Shaders/Common.h` with their constants intact, because those numbers
-are the difference between sand that behaves and sand that does not.
+**Play it:** <https://sandkraft.vercel.app>
+
+This is the web edition of [Sandkraft](https://github.com/KLINEKRAFT/Sandkraft),
+a Metal/SwiftUI app for iOS and macOS. It is not a port of that app — it is a
+much smaller thing that shares its physics. The angle-of-repose curve, the
+eight-neighbour avalanche relaxation and the beach profile came across with
+their constants intact, because those numbers are the difference between sand
+that behaves and sand that does not.
+
+Which makes this a homecoming: Sandkraft's model was itself learned from
+**Tidewright**, an MIT-licensed WebGL2 sandcastle simulator, so bringing it back
+to the browser returns it to where it started. See `ATTRIBUTION.md`.
 
 ## Running it
 
@@ -18,22 +25,16 @@ Any static server. There is no build step and no dependencies — the browser
 loads ES modules directly.
 
 ```
-cd web
 python3 -m http.server 8000
 # then open http://localhost:8000
 ```
 
 ## Deploying to Vercel
 
-The whole thing is static, so there is nothing to configure beyond the
-`vercel.json` already here.
-
-```
-cd web
-npx vercel deploy --prod
-```
-
-Set the project root to `web/` if you deploy from the repository root instead.
+The whole thing is static and lives at the root of this repository, so there is
+nothing to configure: import the repo in Vercel, leave the framework preset on
+**Other**, leave the build command empty, and the `vercel.json` here does the
+rest. Every push to `main` deploys; every pull request gets a preview.
 
 `vercel.json` marks `/src/*` as `must-revalidate`. The shader modules *are* the
 app, and a cached `main.js` against a freshly deployed `shaders/` is a black
@@ -100,7 +101,8 @@ Four decisions, not a filter over a realistic renderer:
 
 ## The two invariants
 
-Inherited from the app, and every edit to `shaders/sim.js` has to preserve both:
+Inherited from the app, and every edit to `src/shaders/sim.js` has to preserve
+both:
 
 1. **Every pair transfer is exactly antisymmetric.** Sand is conserved to the
    last grain. This is what makes an undermined wall fall over without anybody
@@ -139,3 +141,8 @@ Written down rather than left to be discovered:
 - The sea fills any depression below sea level whether or not it is connected to
   the water. On a real beach that is groundwater and looks right; in a deep
   moat cut inland it is a coincidence that happens to look right.
+
+## Licence
+
+MIT — see `LICENSE`. The physics carries Tidewright's MIT lineage, recorded in
+`ATTRIBUTION.md`.

@@ -6,7 +6,7 @@ wall, flatten, pack, wet, decorate — and watch the tide take it back.
 96 m of beach, about three metres of loose sand over the working ground, nine
 tools, six props and three save slots.
 
-**Play it:** <https://sandkraft.vercel.app>
+**Play it:** <https://sandkraft-web.vercel.app>
 
 This is the web edition of [Sandkraft](https://github.com/KLINEKRAFT/Sandkraft),
 a Metal/SwiftUI app for iOS and macOS. It is not a port of that app — it is a

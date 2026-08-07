@@ -9,8 +9,29 @@
 // those constants are the difference between sand that behaves and sand that
 // does not, and they are carried across exactly.
 
+/// How much of the brush works at full strength, as a fraction of its radius.
+///
+/// This lives in JavaScript and is injected into the GLSL below because three
+/// separate things have to agree about it: the solver shapes its falloff with
+/// it, the terrain shader draws the inner ring of the cursor at it, and the UI
+/// talks about it. A brush whose picture and whose effect disagree is worse
+/// than no picture at all.
+///
+/// It used to be 0.30, which meant only nine per cent of the brush's area was
+/// ever at full rate and the rest was a long apologetic shoulder — most of why
+/// the tools felt like they were barely doing anything.
+export const BRUSH_CORE = 0.55;
+
 export const COMMON = /* glsl */ `
 const float PI = 3.14159265359;
+
+const float BRUSH_CORE = ${BRUSH_CORE.toFixed(2)};
+
+/// The brush's strength at distance \`d\` from a stroke of radius \`r\`: flat 1
+/// across the core, easing to 0 at the rim.
+float brushFalloff(float d, float r) {
+    return 1.0 - smoothstep(r * BRUSH_CORE, r, d);
+}
 
 // The simulated square, in metres. Sea toward +Z, dunes at -Z.
 //

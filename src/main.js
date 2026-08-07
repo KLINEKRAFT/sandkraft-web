@@ -77,6 +77,71 @@ const state = {
 /// about the first cut of this game.
 const RAMP_SECONDS = 0.20;
 
+// ------------------------------------------------------------------- cursor
+//
+// Where the tool is and how big it is, in world metres, drawn onto the sand by
+// the terrain shader. On a phone there is no hover and therefore no cursor, so
+// this has to be *shown* rather than assumed: it appears when you touch the
+// beach, when you move the size slider, and when you change tool, and it fades
+// out on its own a beat after you stop.
+
+/// How long the ring stays at full strength after the last thing that moved it.
+const CURSOR_HOLD = 1.1;
+
+const cursor = {
+    x: 0, z: -12,        // the middle of the working pad, until a touch says otherwise
+    radius: 3.0,
+    shape: 0,
+    active: 0,           // eased 0..1: is the tool actually working
+    alpha: 0,            // eased 0..1: is the ring visible at all
+    pulse: 0,            // decays after a tap, flaring the ring
+    hold: 0,             // seconds of full visibility left
+    tint: new Float32Array([1, 1, 1]),
+};
+
+/// One colour per tool, so the ring says *which* tool as well as how big.
+const TOOL_TINT = {
+    [TOOL.dig]:     [1.00, 0.42, 0.26],
+    [TOOL.pour]:    [1.00, 0.74, 0.28],
+    [TOOL.pack]:    [0.70, 0.53, 0.96],
+    [TOOL.wet]:     [0.26, 0.78, 0.95],
+    [TOOL.wall]:    [0.96, 0.55, 0.34],
+    [TOOL.flatten]: [0.52, 0.86, 0.60],
+    [TOOL.mould]:   [0.99, 0.66, 0.33],
+    [TOOL.prop]:    [0.52, 0.86, 0.60],
+    [TOOL.erase]:   [0.93, 0.93, 0.97],
+};
+
+/// The radius the ring should draw, which is the radius the tool will *use* —
+/// not always the slider's number. A ring that lies is worse than none.
+function cursorRadius() {
+    if (state.tool === TOOL.mould) { return state.radius * 0.85; }
+    if (state.tool === TOOL.erase) { return Math.max(state.radius, 2.0); }
+    if (state.tool === TOOL.prop)  { return 1.1; }        // a placement mark, not a brush
+    return state.radius;
+}
+
+/// Likewise the footprint: the brush toggle governs the continuous tools, and
+/// the mould's own shape governs the mould.
+function cursorShape() {
+    if (state.tool === TOOL.mould) { return state.mouldShape === MOULD_SHAPE.block ? 1 : 0; }
+    if (state.tool === TOOL.prop || state.tool === TOOL.erase) { return 0; }
+    return state.shape;
+}
+
+/// Put the ring somewhere and keep it up for a while.
+function markCursor(x, z, hold = CURSOR_HOLD) {
+    cursor.x = x;
+    cursor.z = z;
+    cursor.hold = Math.max(cursor.hold, hold);
+}
+
+/// Show the ring where it already is — for the slider and the tool buttons,
+/// where nothing has been touched but the size or the colour just changed.
+function flashCursor(hold = 1.6) {
+    cursor.hold = Math.max(cursor.hold, hold);
+}
+
 function showToast(message) {
     toast.textContent = message;
     toast.hidden = false;
@@ -121,6 +186,9 @@ function onWork(nx, ny, fresh) {
     if (!p) { return; }
     const [x, z] = p;
 
+    markCursor(x, z);
+    if (fresh) { cursor.pulse = 1; }
+
     if (isInstant(state.tool)) {
         if (!fresh) { return; }        // one per tap, not one per frame
         if (state.tool === TOOL.mould) {
@@ -158,7 +226,12 @@ function onWork(nx, ny, fresh) {
 
 const input = new Input(canvas, camera, {
     onWork,
-    onHover: () => {},
+    // Desktop only — there is no hover on a touchscreen — but where it exists
+    // the ring should track the pointer without waiting for a click.
+    onHover: (nx, ny) => {
+        const p = camera.pickGround(nx, ny, groundAt);
+        if (p) { markCursor(p[0], p[1], 0.20); }
+    },
     onStopWork: () => { state.working = false; sim.endStroke(); },
 });
 
@@ -172,6 +245,11 @@ function selectTool(tool, button) {
     // The contextual row only shows what the current tool actually uses.
     document.getElementById('shapes').hidden = tool !== TOOL.mould;
     document.getElementById('propbar').hidden = tool !== TOOL.prop;
+    // Show the ring in the new tool's colour and at the new tool's size. Some
+    // tools do not use the slider's number at all, and this is where you find
+    // that out.
+    refreshSizeReadout();
+    flashCursor(1.4);
 }
 
 for (const button of document.querySelectorAll('[data-tool]')) {
@@ -184,6 +262,7 @@ for (const button of document.querySelectorAll('[data-shape]')) {
         for (const b of document.querySelectorAll('[data-shape]')) {
             b.classList.toggle('on', b === button);
         }
+        flashCursor(1.2);
     });
 }
 
@@ -201,15 +280,53 @@ PROP_KINDS.forEach((kind, i) => {
     propbar.appendChild(b);
 });
 
-document.getElementById('size').addEventListener('input', (e) => {
+const sizeInput = document.getElementById('size');
+const sizeValue = document.getElementById('sizeval');
+
+/// The readout says what the *current tool* will use, not what the slider says,
+/// because those are not always the same number — a mould turns out at 0.85 of
+/// it and Place does not use it at all. Same source as the ring, so the number
+/// and the picture cannot disagree.
+function refreshSizeReadout() {
+    sizeValue.textContent = state.tool === TOOL.prop
+        ? '—'
+        : `${cursorRadius().toFixed(1)} m`;
+}
+
+sizeInput.addEventListener('input', (e) => {
     state.radius = parseFloat(e.target.value);
+    refreshSizeReadout();
+    // The number and the ring move together, which is the only way a metre
+    // means anything on a beach you are looking at from forty of them.
+    flashCursor();
 });
+refreshSizeReadout();
 
 document.getElementById('footprint').addEventListener('click', (e) => {
     state.shape = state.shape ? 0 : 1;
     e.currentTarget.classList.toggle('on', state.shape === 1);
     e.currentTarget.querySelector('.glyph').textContent = state.shape ? '◼' : '⬤';
+    flashCursor(1.2);
 });
+
+// The hint has done its job the moment a finger lands on the beach.
+const hint = document.getElementById('hint');
+canvas.addEventListener('pointerdown', () => { hint.hidden = true; }, { once: true });
+
+// Nine tools do not fit across a phone, so the bar scrolls — and a bar that
+// scrolls without saying so is a bar whose last four tools do not exist. The
+// fade on the right edge is the whole affordance; it goes away at the end.
+const toolwrap = document.querySelector('.toolwrap');
+const toolbar = toolwrap.querySelector('.tools');
+
+function updateToolFade() {
+    const remaining = toolbar.scrollWidth - toolbar.clientWidth - toolbar.scrollLeft;
+    toolwrap.classList.toggle('atend', remaining <= 4);
+}
+
+toolbar.addEventListener('scroll', updateToolFade, { passive: true });
+window.addEventListener('resize', updateToolFade);
+window.addEventListener('orientationchange', () => setTimeout(updateToolFade, 160));
 
 // --------------------------------------------------------------------- menu
 
@@ -334,6 +451,35 @@ function checkFrameTime(dt) {
     }
 }
 
+/// Ease the ring toward what the tool state says it should be.
+///
+/// It arrives fast and leaves slowly on purpose. Appearing late reads as lag;
+/// vanishing the instant you lift a finger reads as a bug, because the thing
+/// you most want to look at is the hole you just made and where the tool was
+/// when you made it.
+function updateCursor(dt) {
+    cursor.hold = Math.max(0, cursor.hold - dt);
+    cursor.pulse = Math.max(0, cursor.pulse - dt * 3.2);
+
+    cursor.radius = cursorRadius();
+    cursor.shape = cursorShape();
+
+    const tint = TOOL_TINT[state.tool] || TOOL_TINT[TOOL.dig];
+    cursor.tint[0] = tint[0];
+    cursor.tint[1] = tint[1];
+    cursor.tint[2] = tint[2];
+
+    const wantAlpha = (state.working || cursor.hold > 0) ? 1 : 0;
+    const alphaRate = wantAlpha > cursor.alpha ? 14 : 4.5;
+    cursor.alpha += (wantAlpha - cursor.alpha) * Math.min(1, alphaRate * dt);
+    // An exponential fade never quite arrives. Cut the tail rather than leave a
+    // one-per-cent ring sitting on the beach for the rest of the session.
+    if (wantAlpha === 0 && cursor.alpha < 0.012) { cursor.alpha = 0; }
+
+    const wantActive = state.working ? 1 : 0;
+    cursor.active += (wantActive - cursor.active) * Math.min(1, 11 * dt);
+}
+
 function frame(now) {
     const dt = Math.min((now - last) / 1000, 0.1);
     last = now;
@@ -349,9 +495,10 @@ function frame(now) {
     }
 
     sim.step(dt, tier.substeps, env);
+    updateCursor(dt);
 
     camera.update(canvas.width / canvas.height);
-    renderer.draw(sim, camera, env, props);
+    renderer.draw(sim, camera, env, props, cursor);
 
     requestAnimationFrame(frame);
 }
@@ -360,6 +507,11 @@ requestAnimationFrame(frame);
 
 // The page starts hidden so a failed context does not flash a dead UI first.
 ui.hidden = false;
+
+// Only now does the tool bar have a width to measure — a hidden element reports
+// a scrollWidth of zero, which reads as "nothing more to scroll" and hides the
+// very affordance that says otherwise.
+requestAnimationFrame(updateToolFade);
 
 function normalize3(v) {
     const l = Math.hypot(v[0], v[1], v[2]) || 1;

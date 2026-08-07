@@ -271,19 +271,27 @@ void main() {
     // ------------------------------------------------------------- the brush
     //
     // Every rate below is metres (or units) per second at the centre of the
-    // stroke, and they are all far gentler than the first cut of this game.
-    // That version multiplied by twelve and a tap took a crater out of the
-    // beach; a sandcastle tool wants to feel like a hand, which means you
-    // should have to work at it for a second to move something noticeable.
+    // stroke. The first cut of this game multiplied by twelve and a tap took a
+    // crater out of the beach; the correction overshot the other way, and for a
+    // long time a spade held down for a full second moved less sand than the
+    // avalanche put back — so the tool read as broken rather than as gentle.
+    //
+    // These are the rates that make a hole appear while you are still watching
+    // it. They are still well short of the original: the 0.2 s arrival ramp in
+    // main.js is what keeps a tap from gouging, and it does that job whatever
+    // these numbers are.
     if (uTool != 0 && uBrushA.w > 0.0) {
         float d = (uBrushShape == 1)
             ? segDistSquare(wp, uBrushA.xy, uBrushB.xy)
             : segDist(wp, uBrushA.xy, uBrushB.xy);
 
         float r = max(uBrushA.z, 0.05);
-        // A wide shoulder, not a cliff. The soft edge is most of what makes the
-        // tool feel like sand rather than like a cursor.
-        float w = 1.0 - smoothstep(r * 0.30, r, d);
+        // Flat across the core, easing to nothing at the rim. The soft edge is
+        // most of what makes the tool feel like sand rather than like a cursor —
+        // but the core has to be wide enough that the middle of the brush is
+        // actually doing the advertised work. See BRUSH_CORE in common.js; the
+        // ring the renderer draws is the same number.
+        float w = brushFalloff(d, r);
         w *= uBrushA.w;
 
         if (w > 0.0) {
@@ -291,34 +299,41 @@ void main() {
 
             if (uTool == 1) {
                 // Dig. Cannot take what is not there — the hardpack is the floor.
-                h = max(h - k * 0.90, 0.0);
-                m = min(m + k * 0.15, 1.0);       // turned-over sand is damper
+                //
+                // 2.4 m/s at the core, against about 2.9 m of loose sand over
+                // the working pad: roughly a second and a half of holding to
+                // reach the bottom, and visibly deeper every frame on the way.
+                // The old 0.90 lost that race to the avalanche in dry sand,
+                // which is why digging felt like polishing.
+                h = max(h - k * 2.40, 0.0);
+                m = min(m + k * 0.10, 1.0);       // turned-over sand is damper
             } else if (uTool == 2) {
-                // Pour, at the moisture of the pail.
-                float add = k * 0.75;
+                // Pour, at the moisture of the pail. Kept a little under the
+                // spade — a bucket should not out-run a shovel.
+                float add = k * 1.60;
                 float total = h + add;
                 if (total > 1e-6) { m = mix(m, 0.62, add / total); }
                 h = total;
             } else if (uTool == 3) {
                 // Pack, with the flat of a hand. This is what buys a vertical face.
-                c = min(c + k * 1.10, 1.0);
+                c = min(c + k * 1.55, 1.0);
             } else if (uTool == 4) {
-                m = min(m + k * 0.95, 1.0);
+                m = min(m + k * 1.35, 1.0);
             } else if (uTool == 5) {
                 // Wall. Raises the surface toward a ridge of the requested
                 // height above where the stroke started, and packs as it goes —
                 // a rampart you drag out rather than one you pile up by hand.
                 float target = uBrushB.z + uBrushB.w;
                 float want = max(target - b0, 0.0);
-                if (want > h) { h = mix(h, want, clamp(k * 3.2, 0.0, 1.0)); }
-                m = min(m + k * 0.85, 1.0);
-                c = min(c + k * 1.30, 1.0);
+                if (want > h) { h = mix(h, want, clamp(k * 4.4, 0.0, 1.0)); }
+                m = min(m + k * 1.20, 1.0);
+                c = min(c + k * 1.80, 1.0);
             } else if (uTool == 6) {
                 // Flatten toward the height the stroke started at. The one tool
                 // that is about taking away *and* adding, and the fastest way to
                 // get a clean base to build on.
                 float want = max(uBrushB.z - b0, 0.0);
-                h = mix(h, want, clamp(k * 2.2, 0.0, 1.0));
+                h = mix(h, want, clamp(k * 3.2, 0.0, 1.0));
             }
         }
     }

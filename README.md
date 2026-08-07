@@ -71,6 +71,17 @@ Every stroke is a *swept segment*, not a stamped point, so a fast drag is
 continuous rather than dotted. Strength eases in over about a fifth of a second,
 which is what stops a tap from gouging.
 
+The ring on the sand is the tool. Its rim is the edge of the brush, its inner
+ring is the part working at full strength (`BRUSH_CORE` in `shaders/common.js` —
+the same number the solver shapes its falloff with, so the picture and the effect
+cannot drift apart), and the pip is where the stroke is aimed. It is painted by
+the terrain shader rather than drawn as an overlay, which is why it lies over
+dunes, down into holes, and under the sea. It appears when you touch the beach,
+when you move the size slider, and when you change tool, and it fades on its own
+a beat after you let go. The colour is the tool's; the metre reading beside the
+slider is what that tool will actually use, which is not always the slider's own
+number.
+
 ## How a frame is built
 
 1. **Bake the hardpack** — once, at startup, into an RG float table over ±72 m.

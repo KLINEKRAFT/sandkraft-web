@@ -69,7 +69,13 @@ html, body {
     left: 0;
     right: 0;
     bottom: 0;
-    padding: 0 12px calc(12px + env(safe-area-inset-bottom)) 12px;
+    /* viewport-fit=cover put the canvas under the notch and the home indicator;
+       every inset below is the UI climbing back out of it. The left and right
+       ones only bite in landscape, which is exactly where a bar pinned to 12px
+       disappears under the sensor housing. */
+    padding-bottom: calc(12px + env(safe-area-inset-bottom));
+    padding-left: calc(12px + env(safe-area-inset-left));
+    padding-right: calc(12px + env(safe-area-inset-right));
     display: flex;
     flex-direction: column;
     gap: 10px;
@@ -166,11 +172,20 @@ input[type=range]::-moz-range-thumb {
     cursor: pointer;
 }
 
+/* Centred between the left inset and the menu button rather than on the screen,
+   and allowed to wrap. Pinned to 50% with `nowrap` it ran under the menu button
+   on anything narrower than a Plus. */
 #hint {
     position: fixed;
     top: calc(10px + env(safe-area-inset-top));
-    left: 50%;
-    transform: translateX(-50%);
+    left: calc(12px + env(safe-area-inset-left));
+    right: calc(68px + env(safe-area-inset-right));
+    width: max-content;
+    /* Spelled out rather than `100%`: this box's containing block is the
+       viewport, so a percentage would resolve against the whole screen and
+       happily overflow the band that left/right just carved out. */
+    max-width: calc(100vw - 80px - env(safe-area-inset-left) - env(safe-area-inset-right));
+    margin: 0 auto;
     padding: 7px 15px;
     background: var(--paper);
     border: 3px solid var(--ink);
@@ -178,7 +193,8 @@ input[type=range]::-moz-range-thumb {
     box-shadow: var(--shadow);
     font-size: 12px;
     font-weight: 700;
-    white-space: nowrap;
+    line-height: 1.35;
+    text-align: center;
     animation: fade 1s ease 7s forwards;
 }
 
@@ -210,6 +226,24 @@ input[type=range]::-moz-range-thumb {
 }
 .tools::-webkit-scrollbar { display: none; }
 .tools button { flex: 0 0 auto; }
+
+/* ...but a bar that scrolls without saying so is a bar whose last four tools do
+   not exist. The fade sits inside the border, so it reads as the paper running
+   out rather than as a stripe, and it goes when there is nothing left to reach. */
+.toolwrap { position: relative; max-width: 100%; }
+.toolwrap::after {
+    content: '';
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    bottom: 3px;
+    width: 30px;
+    border-radius: 0 19px 19px 0;
+    background: linear-gradient(to left, var(--paper) 25%, rgba(255, 243, 220, 0));
+    pointer-events: none;
+    transition: opacity 160ms ease;
+}
+.toolwrap.atend::after { opacity: 0; }
 
 .chips {
     display: flex;
@@ -251,17 +285,20 @@ input[type=range]::-moz-range-thumb {
 
 #toast {
     position: fixed;
-    top: calc(66px + env(safe-area-inset-top));
-    left: 50%;
-    transform: translateX(-50%);
+    top: calc(72px + env(safe-area-inset-top));
+    left: calc(12px + env(safe-area-inset-left));
+    right: calc(12px + env(safe-area-inset-right));
+    width: max-content;
+    max-width: calc(100vw - 24px - env(safe-area-inset-left) - env(safe-area-inset-right));
+    margin: 0 auto;
     padding: 8px 16px;
     background: var(--ink);
     color: var(--paper);
     border-radius: 16px;
     font-size: 12px;
     font-weight: 700;
+    line-height: 1.35;
     z-index: 6;
-    max-width: 84vw;
     text-align: center;
 }
 
@@ -273,8 +310,10 @@ input[type=range]::-moz-range-thumb {
     justify-content: center;
     background: rgba(50, 37, 28, 0.35);
     z-index: 7;
-    padding: 12px;
-    padding-bottom: calc(12px + env(safe-area-inset-bottom));
+    padding: calc(12px + env(safe-area-inset-top))
+             calc(12px + env(safe-area-inset-right))
+             calc(12px + env(safe-area-inset-bottom))
+             calc(12px + env(safe-area-inset-left));
 }
 
 .sheetinner {
@@ -324,10 +363,38 @@ button.mini {
 }
 button.mini:disabled { opacity: 0.4; cursor: default; }
 
+/* The size readout. The ring on the sand is the picture; this is the number,
+   and the two are set from the same place so they cannot disagree. */
+#sizeval {
+    min-width: 44px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.75;
+}
+
 @media (max-width: 400px) {
     button { min-width: 50px; height: 50px; }
     .tools button .label { font-size: 9px; }
-    input[type=range] { width: 100px; }
+    input[type=range] { width: 92px; }
+    #sizeval { min-width: 40px; font-size: 11px; }
+    .sizer { padding: 6px 12px; gap: 8px; }
+}
+
+/* A phone on its side has about 390 points of height, and the bar as laid out
+   for portrait eats half of it. Everything comes down a size — still past the
+   44pt touch target — so there is a beach left to dig in. */
+@media (max-height: 520px) {
+    #ui { gap: 6px; padding-bottom: calc(8px + env(safe-area-inset-bottom)); }
+    button { min-width: 46px; height: 46px; border-radius: 13px; }
+    button .glyph { font-size: 16px; }
+    button .label { font-size: 9px; }
+    .tools { padding: 6px; gap: 6px; border-radius: 19px; }
+    .chip { min-width: 42px; height: 38px; }
+    .chip .glyph { font-size: 15px; }
+    .chip .label { font-size: 8px; }
+    .sizer { padding: 4px 12px; }
+    input[type=range] { width: 108px; }
+    .sheetinner { max-height: 74vh; }
 }
 </style>
 </head>
@@ -352,20 +419,23 @@ button.mini:disabled { opacity: 0.4; cursor: default; }
     <div class="sizer">
         <button id="footprint" class="mini glyphonly" title="Round or square footprint"><span class="glyph">⬤</span></button>
         <input id="size" type="range" min="1.0" max="9.0" step="0.1" value="3.0" aria-label="Brush size">
+        <span id="sizeval">3.0 m</span>
     </div>
 
-    <!-- Scrolls sideways rather than wrapping. Eight tools do not fit across a
+    <!-- Scrolls sideways rather than wrapping. Nine tools do not fit across a
          phone, and a wrapped two-row bar eats the beach. -->
-    <div class="tools">
-        <button data-tool="dig" class="on"><span class="glyph">⛏</span><span class="label">Dig</span></button>
-        <button data-tool="pour"><span class="glyph">🪣</span><span class="label">Pour</span></button>
-        <button data-tool="mould"><span class="glyph">🏰</span><span class="label">Mould</span></button>
-        <button data-tool="wall"><span class="glyph">🧱</span><span class="label">Wall</span></button>
-        <button data-tool="flatten"><span class="glyph">▭</span><span class="label">Flatten</span></button>
-        <button data-tool="pack"><span class="glyph">✋</span><span class="label">Pack</span></button>
-        <button data-tool="wet"><span class="glyph">💧</span><span class="label">Wet</span></button>
-        <button data-tool="prop"><span class="glyph">🚩</span><span class="label">Place</span></button>
-        <button data-tool="erase"><span class="glyph">🧺</span><span class="label">Pick up</span></button>
+    <div class="toolwrap">
+        <div class="tools">
+            <button data-tool="dig" class="on"><span class="glyph">⛏</span><span class="label">Dig</span></button>
+            <button data-tool="pour"><span class="glyph">🪣</span><span class="label">Pour</span></button>
+            <button data-tool="mould"><span class="glyph">🏰</span><span class="label">Mould</span></button>
+            <button data-tool="wall"><span class="glyph">🧱</span><span class="label">Wall</span></button>
+            <button data-tool="flatten"><span class="glyph">▭</span><span class="label">Flatten</span></button>
+            <button data-tool="pack"><span class="glyph">✋</span><span class="label">Pack</span></button>
+            <button data-tool="wet"><span class="glyph">💧</span><span class="label">Wet</span></button>
+            <button data-tool="prop"><span class="glyph">🚩</span><span class="label">Place</span></button>
+            <button data-tool="erase"><span class="glyph">🧺</span><span class="label">Pick up</span></button>
+        </div>
     </div>
 </div>
 

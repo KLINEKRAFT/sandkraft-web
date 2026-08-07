@@ -115,6 +115,16 @@ uniform float uTime;
 uniform float uCell;
 uniform float uOuter;
 
+// The tool cursor.
+//
+// uCursor:     xy = centre in world metres, z = radius, w = opacity 0..1
+// uCursor2:    x = footprint (0 round, 1 square), y = 1 while the tool is
+//              actually working, z = tap flare 0..1
+// uCursorTint: the tool's colour
+uniform vec4 uCursor;
+uniform vec4 uCursor2;
+uniform vec3 uCursorTint;
+
 in vec3 vWorld;
 in vec3 vSand;
 in float vInside;
@@ -194,6 +204,53 @@ void main() {
     float sl = seaLevelAt(uSeaBase, uTime);
     float swash = smoothstep(0.55, 0.0, abs(vWorld.y - sl - 0.06));
     col = mix(col, col * vec3(0.72, 0.76, 0.84), swash * 0.55);
+
+    // ---------------------------------------------------------- the tool ring
+    //
+    // Painted onto the sand rather than drawn as a separate overlay pass, which
+    // buys three things for free: it lies over dunes and down into holes instead
+    // of floating flat above them, the sea covers it where the sea covers the
+    // sand, and it costs one branch in a shader that is already running.
+    //
+    // What it shows, from the outside in: the rim is the edge of the brush, the
+    // inner ring is BRUSH_CORE — where the tool is at full strength — and the
+    // pip is where the stroke is aimed.
+    if (uCursor.w > 0.01) {
+        vec2 dv = wp - uCursor.xy;
+        float d = (uCursor2.x > 0.5) ? max(abs(dv.x), abs(dv.y)) : length(dv);
+        float r = max(uCursor.z, 0.25);
+
+        // A tap flares the ring outward and then it settles back.
+        float q = d / (r * (1.0 + 0.11 * uCursor2.z));
+
+        // One pixel wide in q, whatever the camera is doing. Without this the
+        // ring crawls with moire the moment you pull the camera back.
+        float aa = max(fwidth(q), 0.0015);
+        // The band is about a third of a metre wide in world terms whatever the
+        // radius, so a nine-metre brush does not come with a nine-metre hoop.
+        float band = clamp(0.34 / r, 0.020, 0.11);
+
+        float t = abs(q - 1.0);
+        float rim = 1.0 - smoothstep(band - aa, band + aa, t);
+        float ink = max((1.0 - smoothstep(band * 1.8 - aa, band * 1.8 + aa, t)) - rim, 0.0);
+
+        float ct = abs(q - BRUSH_CORE);
+        float core = 1.0 - smoothstep(band * 0.6 - aa, band * 0.6 + aa, ct);
+        float coreFill = 1.0 - smoothstep(BRUSH_CORE - aa, BRUSH_CORE + aa, q);
+        float disc = 1.0 - smoothstep(1.0 - aa, 1.0 + aa, q);
+        float pip = 1.0 - smoothstep(band * 1.3 - aa, band * 1.3 + aa, q);
+
+        float live = uCursor2.y;
+        float a = uCursor.w;
+
+        // A wash over the footprint, doubled over the core, brightening while
+        // the tool is down so you can tell aiming from working at a glance.
+        col = mix(col, uCursorTint, (disc * 0.09 + coreFill * 0.13) * a * (0.5 + 0.5 * live));
+        col = mix(col, uCursorTint, core * 0.42 * a);
+        col = mix(col, uCursorTint, rim * (0.68 + 0.32 * live) * a);
+        col = mix(col, vec3(0.196, 0.145, 0.114), ink * 0.72 * a);
+        col = mix(col, uCursorTint, pip * 0.8 * a);
+    }
 
     // Alpha is not opacity here — it is the ink mask, and it is the whole reason
     // the scene target has an alpha channel.

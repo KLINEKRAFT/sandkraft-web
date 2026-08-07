@@ -45,12 +45,19 @@ export class Renderer {
         this.scene = sceneTarget(gl, width, height);
     }
 
-    draw(sim, camera, env, props, cursor) {
+    draw(sim, camera, env, props, cursor, light) {
         const gl = this.gl;
         const { width, height } = this.scene;
         const domainSpan = 96;
 
         gl.bindVertexArray(this.vao);
+
+        // The light table first, before anything is bound to the screen. It
+        // reads the same sand texture the beach is about to be drawn from, so
+        // baking it here rather than last frame is what stops a tower's shadow
+        // arriving a frame after the tower.
+        light.bake(sim, env);
+
         gl.bindFramebuffer(gl.FRAMEBUFFER, this.scene.fbo);
         gl.viewport(0, 0, width, height);
         // Alpha clears to zero because alpha is the ink mask, not opacity.
@@ -90,7 +97,7 @@ export class Renderer {
         // border of the playable square.
         if (cursor && cursor.alpha > 0.01) {
             gl.uniform4f(t.uCursor, cursor.x, cursor.z, cursor.radius, cursor.alpha);
-            gl.uniform4f(t.uCursor2, cursor.shape, cursor.active, cursor.pulse, 0);
+            gl.uniform4f(t.uCursor2, cursor.shape, cursor.active, cursor.pulse, cursor.rotation);
             gl.uniform3fv(t.uCursorTint, cursor.tint);
         } else {
             gl.uniform4f(t.uCursor, 0, 0, 1, 0);
@@ -99,6 +106,7 @@ export class Renderer {
 
         bindTexture(gl, this.pTerrain, 'uField', 0, sim.front);
         bindTexture(gl, this.pTerrain, 'uBedrock', 1, sim.bedrock);
+        bindTexture(gl, this.pTerrain, 'uLight', 2, light.texture);
 
         // Inner grid FIRST, skirt second — which is the opposite of the obvious
         // order and roughly halves the fragment cost over the middle of the
@@ -136,6 +144,7 @@ export class Renderer {
             bindTexture(gl, this.pProps, 'uField', 0, sim.front);
             bindTexture(gl, this.pProps, 'uBedrock', 1, sim.bedrock);
             bindTexture(gl, this.pProps, 'uProps', 2, props.texture);
+            bindTexture(gl, this.pProps, 'uLight', 3, light.texture);
             gl.drawArraysInstanced(gl.TRIANGLES, 0, 6, props.count);
         }
 
@@ -156,6 +165,7 @@ export class Renderer {
         gl.uniform1f(w.uWaveAmp, env.waveAmplitude);
         bindTexture(gl, this.pWater, 'uField', 0, sim.front);
         bindTexture(gl, this.pWater, 'uBedrock', 1, sim.bedrock);
+        bindTexture(gl, this.pWater, 'uLight', 2, light.texture);
         gl.drawArrays(gl.TRIANGLES, 0, gridVertexCount(this.quality.waterGrid));
 
         gl.depthMask(true);

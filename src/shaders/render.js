@@ -108,6 +108,7 @@ ${COMMON}
 
 uniform sampler2D uField;
 uniform sampler2D uBedrock;
+uniform sampler2D uLight;     // .r sun visibility, .g sky visibility
 uniform vec3  uSunDir;
 uniform vec3  uCamera;
 uniform float uSeaBase;
@@ -119,7 +120,7 @@ uniform float uOuter;
 //
 // uCursor:     xy = centre in world metres, z = radius, w = opacity 0..1
 // uCursor2:    x = footprint (0 round, 1 square), y = 1 while the tool is
-//              actually working, z = tap flare 0..1
+//              actually working, z = tap flare 0..1, w = footprint rotation
 // uCursorTint: the tool's colour
 uniform vec4 uCursor;
 uniform vec4 uCursor2;
@@ -183,21 +184,52 @@ void main() {
     albedo = mix(albedo, albedo * vec3(0.93, 0.93, 0.98), packing * 0.35);
 
     // -------------------------------------------------------------- light
+    //
+    // Two occlusion terms out of the baked table: how much of the sun reaches
+    // here, and how much of the sky. Off the simulated square both are 1, so
+    // the skirt is simply open beach.
+    vec2 L = lightAt(uLight, wp);
+    float sun = L.x;
+    float sky = L.y;
+
+    // The cast shadow folds into the lambert term *before* the bands, not after.
+    //
+    // Multiplying a quantised key by a smooth shadow would put a fourth, ungraded
+    // value on the beach and the picture stops reading as flat colour — which is
+    // the whole look. Folding it in first means a shadow edge gets the same
+    // soft-shouldered step as a dune crest and lands in the same three tones, so
+    // a tower's shadow is painted in the palette rather than dimmed out of it.
     float NoL = max(dot(N, uSunDir), 0.0);
-    float key = bands(NoL);
+    float key = bands(NoL * sun);
+
+    // Occlusion runs through the same three steps as the light does. A smooth
+    // ambient term laid over quantised key light is the fastest way to undo this
+    // whole renderer: it reintroduces exactly the continuous grey ramp that the
+    // banding exists to remove, and a moulded tower comes out looking like grey
+    // plastic instead of sand. Quantised, it stays a painted shadow layer.
+    float ambient = bands(sky);
 
     // Shadow as a hue shift, not a multiply. Violet in the dark, warm in the
     // light — this is the single biggest difference between a cartoon and a
     // photograph with the exposure pulled down.
-    vec3 lit   = albedo * vec3(1.06, 1.02, 0.94);
-    vec3 shade = albedo * vec3(0.62, 0.62, 0.82);
+    //
+    // Occlusion belongs *in the shade colour*, not on top of the result. What
+    // ambient occlusion physically describes is sky light that never arrives,
+    // and the shade tone is where the sky light is — so a crevice deepens the
+    // tone it already had rather than having a second darkness painted over it.
+    // Applied on top it double-darkens every surface that is both facing away
+    // from the sun and enclosed, which is most of a sandcastle.
+    vec3 lit   = albedo * vec3(1.06, 1.02, 0.94) * mix(0.88, 1.0, ambient);
+    vec3 shade = albedo * mix(vec3(0.44, 0.43, 0.63), vec3(0.62, 0.62, 0.82), ambient);
     vec3 col = mix(shade, lit, key);
 
     // A rim of sky along every upward edge. Cheap, and it separates a dune from
-    // the sea behind it without needing an outline there.
+    // the sea behind it without needing an outline there. Scaled by how much sky
+    // there actually is, or the inside of a pit picks up a bright lip from a
+    // horizon it cannot see.
     vec3 V = normalize(uCamera - vWorld);
     float rim = pow(1.0 - max(dot(N, V), 0.0), 3.0);
-    col += vec3(0.24, 0.34, 0.42) * rim * 0.5;
+    col += vec3(0.24, 0.34, 0.42) * rim * 0.5 * ambient;
 
     // The swash line: a band of darker, shinier sand right at the waterline,
     // which is what tells you where the sea has just been.
@@ -217,6 +249,13 @@ void main() {
     // pip is where the stroke is aimed.
     if (uCursor.w > 0.01) {
         vec2 dv = wp - uCursor.xy;
+        // Same convention as the mould: the sample point is rotated, not the
+        // shape, so a square ring turned along a drag matches the block that is
+        // about to land in it.
+        if (uCursor2.w != 0.0) {
+            float cr = cos(uCursor2.w), sr = sin(uCursor2.w);
+            dv = vec2(cr * dv.x - sr * dv.y, sr * dv.x + cr * dv.y);
+        }
         float d = (uCursor2.x > 0.5) ? max(abs(dv.x), abs(dv.y)) : length(dv);
         float r = max(uCursor.z, 0.25);
 
@@ -306,6 +345,7 @@ ${COMMON}
 
 uniform sampler2D uField;
 uniform sampler2D uBedrock;
+uniform sampler2D uLight;
 uniform float uTime;
 uniform float uSeaBase;
 
@@ -343,6 +383,12 @@ void main() {
     foam *= smoothstep(0.32, 0.62, scud + crest * 0.35);
 
     col = mix(col, vec3(1.0), clamp(foam, 0.0, 1.0));
+
+    // A shadow crossing the waterline has to keep going. Without this a tower
+    // standing in the shallows throws a shape that stops dead at the water's
+    // edge, which is the one place the eye is already looking. Gentle, because a
+    // cartoon sea is a colour and a shape and not a mirror.
+    col *= mix(0.84, 1.0, lightAt(uLight, vWorld.xz).x);
 
     outColor = vec4(col, coverage);
 }`;

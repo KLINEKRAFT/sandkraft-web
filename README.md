@@ -60,7 +60,7 @@ a phone has no modifier key to hold.
 |---|---|
 | **Dig** | Takes sand away, down to the hardpack and no further |
 | **Pour** | Adds damp sand from the pail |
-| **Mould** | Turns out a tower, a block or a cone — packed hard, so it stands |
+| **Mould** | Turns out a tower, a block or a cone — packed hard, so it stands. Tap for one; **drag to lay a run** |
 | **Wall** | Drags out a packed rampart at one height |
 | **Flatten** | Levels toward wherever the stroke began |
 | **Pack** | The flat of a hand. This is what buys a vertical face |
@@ -70,6 +70,36 @@ a phone has no modifier key to hold.
 Every stroke is a *swept segment*, not a stamped point, so a fast drag is
 continuous rather than dotted. Strength eases in over about a fifth of a second,
 which is what stops a tap from gouging.
+
+**Dragging the mould lays a run.** Every shape in the run stands on the height
+the run *started* at, which is what makes a line of blocks come out as one wall
+with a level top instead of a row of lumps following the beach down to the sea.
+Blocks turn to face along the drag and overlap heavily so the run reads as solid;
+towers and cones stand further apart, so dragging those gives you a row of
+turrets. A tap keeps the heading the last drag ended on, so a wall you extend one
+block at a time stays square to the wall it is extending.
+
+**Undo** (↺, top left) goes back a step at a time — eight on a phone, fourteen on
+a desktop. One entry per action: a stroke is one undo, a dragged run of forty
+blocks is one undo, and so is starting a new beach. The copy is
+`blitFramebuffer`, GPU to GPU, so taking it costs nothing on the strokes nobody
+ever undoes. `sim.snapshot()` would have been the obvious way and is the wrong
+one: it is a `readPixels` of a megabyte and a half that stalls the pipeline, on
+every stroke, whether or not the feature is used.
+
+**Snap** (⊞, beside the size slider) is two things under one switch, because they
+are one idea — stop the beach depending on how steady your thumb is:
+
+- the tool lands on a one-metre grid, so two towers placed a minute apart line
+  up. One metre rather than something derived from the brush, because a grid that
+  changes size when you move a slider is not a grid you can build a symmetry on;
+- a **mould run or a wall drag locks to one of the eight compass headings** and
+  runs dead straight from where it began, however much the finger wanders. The
+  heading is *latched* once the drag is a metre and a half long, not re-derived
+  as you go: a hand wobbling across the boundary between two headings would
+  otherwise make the far end of the wall jump between two rays and the run would
+  fill in the gap each time. What you get then is not a wall, it is a ploughed
+  field.
 
 The ring on the sand is the tool. Its rim is the edge of the brush, its inner
 ring is the part working at full strength (`BRUSH_CORE` in `shaders/common.js` —
@@ -90,23 +120,66 @@ number.
 2. **Step the solver** — two or three substeps of fragment-shader ping-pong
    between two float textures. WebGL2 has no compute shaders, so this is the
    original architecture rather than the app's Metal kernels.
-3. **Draw sky, beach, props, sea** into an offscreen colour + depth target.
+3. **Bake the light** — one small world-space pass over the playable square,
+   holding how much of the sun and how much of the sky reach each point. See
+   below.
+4. **Draw sky, beach, props, sea** into an offscreen colour + depth target.
    The fine grid goes down before the skirt, so the skirt's fragments over the
    playable square are depth-rejected instead of shaded twice.
-4. **Ink and composite** — silhouettes found in screen space from depth.
+5. **Ink and composite** — silhouettes found in screen space from depth.
 
 There are no vertex buffers anywhere. Positions are decoded from `gl_VertexID`
 and the height comes from a vertex texture fetch of the live simulation, so the
 geometry cannot lag the sand by a frame.
 
+## Sun and sky
+
+A heightfield does not need a shadow map. The occluder and the receiver are the
+same function, so you can walk toward the sun and ask whether the ground has got
+above you yet — no second camera, no depth pass, no bias to tune, and no
+resolution mismatch between what casts and what receives.
+
+`src/shaders/light.js` marches that walk and writes two terms into a small RGBA8
+table over the playable square:
+
+- **sun visibility**, directional, with a penumbra that widens with distance from
+  the receiver — a moulded lip stays crisp at its own foot and a headland goes
+  soft across the bay. This is the term whose absence made a castle look like a
+  sticker lying on the beach.
+- **sky visibility**, ambient, by horizon angle in eight directions. This is the
+  one no amount of normal-based shading can fake: the normal at the bottom of a
+  hole points straight up at the sky it cannot see, so without it a moat is as
+  bright as open sand and reads as a painted circle.
+
+Baked into a table rather than evaluated per pixel because the cost then stops
+depending on how many pixels the phone has — 256² is one 65k-fragment pass
+whatever the display is doing, against a terrain shader running over a million
+fragments at 2x. It is re-baked every frame, not once, because the thing casting
+the shadows is the thing you are digging.
+
+Two rules about how it is *applied*, and both matter more than they look:
+
+- the cast shadow folds into the lambert term **before** the banding, so a shadow
+  edge lands in the same three tones as everything else. A quantised key light
+  multiplied by a smooth shadow puts a fourth, ungraded value on the beach and
+  the picture stops reading as flat colour.
+- occlusion goes **into the shade colour**, not on top of the result. Ambient
+  occlusion describes sky light that never arrives, and the shade tone is where
+  the sky light is. Laid over the top it double-darkens everything that is both
+  turned away from the sun and enclosed — which is most of a sandcastle — and a
+  moulded tower comes out looking like grey plastic.
+
 ## What "cartoon" means here
 
-Four decisions, not a filter over a realistic renderer:
+Five decisions, not a filter over a realistic renderer:
 
-- light is quantised into three bands rather than smoothly integrated;
+- light is quantised into three bands rather than smoothly integrated — and so
+  is everything that modulates it, including both occlusion terms;
 - shadow is a **hue shift** toward violet rather than the same colour multiplied
   down — that single change is most of what separates a cartoon from an
   underexposed photograph;
+- cast shadow and ambient occlusion are both real and both cheap, because the
+  ground is a function rather than a mesh;
 - every silhouette on the playable square gets an ink line;
 - the sea is two tones and a band of foam, with no specular at all.
 

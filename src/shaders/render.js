@@ -237,6 +237,39 @@ void main() {
     float swash = smoothstep(0.55, 0.0, abs(vWorld.y - sl - 0.06));
     col = mix(col, col * vec3(0.72, 0.76, 0.84), swash * 0.55);
 
+    // ----------------------------------------------------------- depth lines
+    //
+    // A trench seen down its own length is a dark smear and nothing else. The
+    // camera looks along the beach at about thirty-five degrees, which
+    // foreshortens relief to almost nothing, and shading can tell you a slope is
+    // there but not how far down it goes — so digging reads as staining the sand
+    // rather than removing it.
+    //
+    // Contour lines can, and they are the one depth cue that survives a grazing
+    // view, which is exactly why maps have them. Count the rings and you know
+    // the depth; watch a new one appear and you know you are making progress.
+    //
+    // Gated on slope, so untouched beach stays a flat wash and the lines turn up
+    // only where the question comes up: pit walls, dune faces, the sides of a
+    // moulded tower. The sand's own noise is nowhere near the lower threshold.
+    // Banded at both ends. Below the lower threshold is flat beach, where there
+    // is no depth to report and the sand's own noise would otherwise print a
+    // grid over it. Above the upper one the face is near vertical, the rings
+    // crowd into a stripe pattern, and a moulded tower stops reading as packed
+    // sand and starts reading as a layer cake — so they fade back out again and
+    // leave that job to the shading, which does it well on a vertical wall.
+    float slope = 1.0 - clamp(N.y, 0.0, 1.0);
+    float relief = smoothstep(0.03, 0.18, slope) * (1.0 - smoothstep(0.52, 0.86, slope));
+    if (relief > 0.002) {
+        float f = vWorld.y / CONTOUR_METRES;
+        // Divided by the screen-space derivative, so a line is one pixel wide
+        // whatever the slope and whatever the zoom. Without it a shallow face
+        // floods with colour and a vertical one shows nothing at all.
+        float w = max(fwidth(f), 1e-4);
+        float ring = 1.0 - smoothstep(0.55, 1.8, abs(fract(f + 0.5) - 0.5) / w);
+        col = mix(col, col * vec3(0.54, 0.52, 0.62), ring * relief * 0.62);
+    }
+
     // ---------------------------------------------------------- the tool ring
     //
     // Painted onto the sand rather than drawn as a separate overlay pass, which

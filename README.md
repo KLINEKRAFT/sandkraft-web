@@ -42,9 +42,35 @@ screen with no error in the console. (The rule is not a comment in that file
 because Vercel validates `vercel.json` strictly and JSON has no comments — an
 unknown key fails the deploy.)
 
+## On the Home Screen
+
 Adding it to an iPhone Home Screen gives you a full-screen launcher with no
 Safari chrome, which is most of the way to feeling like an app without being
 one. It is still a web page: no App Store listing, no push, no haptics.
+
+Three things have to agree for that to actually be full-screen, and getting only
+some of them right installs a *framed* web app instead — one iOS insets inside
+the safe area, painting the page's background colour into the margins above and
+below. That shows up as a band of flat colour where the beach should be.
+
+- the `apple-mobile-web-app-*` metas, which older iOS reads;
+- `manifest.webmanifest` with `display: standalone`, which current iOS reads;
+- `viewport-fit=cover`, which is what lets the canvas run under the status bar
+  and the home indicator rather than stopping at them.
+
+`body` also carries a two-stop gradient — sky at the top, sand at the bottom —
+rather than a flat colour. It is never seen when the above is working. It is
+there because when it is *not* working, that background is exactly what iOS
+paints into the margins, and two stops that match what the renderer draws at
+those edges make the seam invisible instead of a bright stripe.
+
+**iOS caches an installed app's metadata at the moment you add it.** Changing any
+of this does nothing to an app already on a Home Screen — it has to be removed
+and re-added.
+
+`icon-180.png` exists because without an `apple-touch-icon` iOS puts a
+*screenshot of the page* on the Home Screen. It is the one place this project
+spends a second request on something that is not the game.
 
 ## Controls
 
@@ -180,6 +206,13 @@ Five decisions, not a filter over a realistic renderer:
   underexposed photograph;
 - cast shadow and ambient occlusion are both real and both cheap, because the
   ground is a function rather than a mesh;
+- relief carries **contour lines**, at 45 cm, on ground sloped enough to have
+  something to say. The camera looks along the beach at about thirty-five
+  degrees, which foreshortens a trench seen down its own length into a dark
+  smear — shading can tell you a slope is there but not how far down it goes.
+  Contours can, which is why maps have them. They band out at both ends: flat
+  beach has no depth to report, and a near-vertical face crowds them into
+  stripes that turn a moulded tower into a layer cake;
 - every silhouette on the playable square gets an ink line;
 - the sea is two tones and a band of foam, with no specular at all.
 

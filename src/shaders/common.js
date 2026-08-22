@@ -27,6 +27,11 @@ const float PI = 3.14159265359;
 
 const float BRUSH_CORE = ${BRUSH_CORE.toFixed(2)};
 
+/// Height between contour rings on the beach, in metres. About six of them from
+/// the top of the working pad down to the hardpack, which is enough to count at
+/// a glance and few enough not to read as a texture.
+const float CONTOUR_METRES = 0.45;
+
 /// The brush's strength at distance \`d\` from a stroke of radius \`r\`: flat 1
 /// across the core, easing to 0 at the rim.
 float brushFalloff(float d, float r) {
